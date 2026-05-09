@@ -1,0 +1,69 @@
+import uuid
+import time
+import random
+import requests
+import threading
+
+# ================== CONFIG ==================
+SUPABASE_URL = "https://gecnjqonhfmrtmgfvnep.supabase.co/rest/v1"
+SUPABASE_ANON_KEY = "sb_publishable_jl9e1u-fkPZLFFqTTfeQVg_dbiwhngu"
+
+HEADERS = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    "Content-Type": "application/json"
+}
+
+def generate_vote(edge_id):
+    return {
+        "user_id": str(uuid.uuid4()),
+        "edge_id": edge_id,
+        "poll_id": "poll_1",
+        "choice": random.choice(["A", "B", "C"]),
+        "timestamp": time.time()
+    }
+
+def send_vote(vote):
+    try:
+        response = requests.post(f"{SUPABASE_URL}/votes", headers=HEADERS, json=vote)
+        if response.status_code in [200, 201]:
+            print(f"SUCCESS | {vote['edge_id']} | {vote['choice']}")
+        elif response.status_code == 409 or "unique" in str(response.text).lower():
+            print(f"DUPLICATE | {vote['edge_id']}")
+        else:
+            print(f"FAILED ({response.status_code}) | {vote['edge_id']}")
+    except Exception as e:
+        print(f"ERROR | {vote['edge_id']} | {e}")
+
+def run_edge_node(edge_id, num_votes=25):
+    print(f"STARTING {edge_id} - Sending {num_votes} votes...")
+    for _ in range(num_votes):
+        vote = generate_vote(edge_id)
+        send_vote(vote)
+
+        # Simulate network retry / duplicate (Fault Tolerance)
+        if random.random() < 0.25:   # 25% chance of duplicate
+            print(f"Duplicate sent from {edge_id}")
+            send_vote(vote)
+
+        time.sleep(random.uniform(0.3, 1.5))
+    print(f"FINISHED {edge_id}")
+
+# ================== RUN MULTIPLE EDGES ==================
+if __name__ == "__main__":
+    print("=== DISTRIBUTED VOTING SYSTEM STARTED ===\n")
+
+    edges = ["edge-1", "edge-2", "edge-3"]
+    threads = []
+
+    for edge in edges:
+        t = threading.Thread(target=run_edge_node, args=(edge, 20))
+        threads.append(t)
+        t.start()
+        time.sleep(0.7)
+
+    for t in threads:
+        t.join()
+
+    print("\nALL EDGE NODES FINISHED!")
+    print("Check your Supabase table to see the votes.")

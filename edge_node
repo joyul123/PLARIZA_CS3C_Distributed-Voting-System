@@ -1,0 +1,62 @@
+import uuid
+import time
+import random
+import requests
+
+# ================== SUPABASE CONFIG ==================
+SUPABASE_URL = "https://gecnjqonhfmrtmgfvnep.supabase.co/rest/v1"
+
+SUPABASE_ANON_KEY = "sb_publishable_jl9e1u-fkPZLFFqTTfeQVg_dbiwhngu"
+
+HEADERS = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+    "Content-Type": "application/json"
+}
+
+def generate_vote(edge_id):
+    return {
+        "user_id": str(uuid.uuid4()),
+        "edge_id": edge_id,
+        "poll_id": "poll_1",
+        "choice": random.choice(["A", "B", "C"]),
+        "timestamp": time.time()
+    }
+
+def send_vote(vote, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                f"{SUPABASE_URL}/votes",          # Using the exact base you gave
+                headers=HEADERS,
+                json=vote
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"SUCCESS → {vote['edge_id']} | {vote['choice']}")
+                return True
+            elif response.status_code == 409 or "unique" in str(response.text).lower():
+                print(f"DUPLICATE vote skipped")
+                return True
+            else:
+                print(f"FAILED ({response.status_code}): {response.text[:150]}")
+                
+        except Exception as e:
+            print(f"ERROR on attempt {attempt+1}: {e}")
+       
+        time.sleep(2 ** attempt)
+   
+    print("Max retries reached")
+    return False
+
+# ================== RUN EDGE NODE ==================
+if __name__ == "__main__":
+    edge_id = "edge-1"
+    print(f"STARTING Edge Node: {edge_id}\n")
+   
+    for i in range(25):
+        vote = generate_vote(edge_id)
+        send_vote(vote)
+        time.sleep(random.uniform(0.5, 1.8))
+   
+    print(f"\nFINISHED Edge Node {edge_id}!")
